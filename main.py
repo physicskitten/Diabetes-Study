@@ -1,60 +1,49 @@
-# Importing Libraries
+# Import Libraries
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import (confusion_matrix, accuracy_score, mean_squared_error, 
-                             r2_score, recall_score, classification_report, f1_score)
+from sklearn.metrics import (confusion_matrix, accuracy_score, f1_score, classification_report)
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from imblearn.over_sampling import RandomOverSampler
-
 import warnings
+
+# Ignore warnings
 warnings.filterwarnings("ignore")
 sns.set()
 plt.style.use("ggplot")
-%matplotlib inline
 
-# Loading the Dataset
+# Load Dataset
 df = pd.read_csv('/kaggle/input/diabetes-data-set/diabetes.csv')
 
-# Initial Data Exploration
-print("First 5 rows of the dataset:")
-print(df.head())
+# Initial Exploration
+def explore_data(df):
+    print("First 5 rows of the dataset:")
+    print(df.head())
+    print("\nDataset Shape:", df.shape)
+    print("\nMissing values in each column:")
+    print(df.isna().sum())
+    print(f"\nNumber of duplicated rows: {df.duplicated().sum()}")
+    print("\nStatistical Summary:")
+    print(df.describe())
+    print("\nTarget class distribution (counts):")
+    print(df['Outcome'].value_counts())
+    print("\nTarget class distribution (%):")
+    print(df['Outcome'].value_counts() * 100 / len(df))
+    sns.countplot(x='Outcome', data=df)
+    plt.title('Class Distribution')
+    plt.show()
 
-print("\nDataset Shape:", df.shape)
+explore_data(df)
 
-# Check for missing values
-print("\nMissing values in each column:")
-print(df.isna().sum())
-
-# Check for duplicated rows
-duplicate_count = df.duplicated().sum()
-print(f"\nNumber of duplicated rows: {duplicate_count}")
-if duplicate_count > 0:
-    df = df.drop_duplicates()
-    print(f"Duplicates removed. New shape: {df.shape}")
-
-# Basic Statistical Summary
-print("\nStatistical Summary:")
-print(df.describe())
-
-# Class distribution of the target variable
-print("\nTarget class distribution (counts):")
-print(df['Outcome'].value_counts())
-
-print("\nTarget class distribution (%):")
-print(df['Outcome'].value_counts() * 100 / len(df))
-
-# Visualizing the class imbalance
-sns.countplot(x='Outcome', data=df)
-plt.title('Class Distribution')
-plt.show()
+# Drop duplicates if any
+df.drop_duplicates(inplace=True)
 
 # Splitting Features and Target
 X = df.drop('Outcome', axis=1)
@@ -72,7 +61,7 @@ scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# Define models
+# Define models with some parameter tuning
 models = {
     'Logistic Regression': LogisticRegression(),
     'K-Nearest Neighbors': KNeighborsClassifier(),
@@ -82,16 +71,57 @@ models = {
     'Gradient Boosting': GradientBoostingClassifier()
 }
 
-# Train and Evaluate models
-for name, model in models.items():
-    model.fit(X_train_scaled, y_train)
-    y_pred = model.predict(X_test_scaled)
+# Hyperparameter tuning grid (optional)
+param_grids = {
+    'Logistic Regression': {'C': [0.1, 1, 10]},
+    'K-Nearest Neighbors': {'n_neighbors': [3, 5, 7]},
+    'Support Vector Machine': {'C': [0.1, 1, 10], 'kernel': ['linear', 'rbf']},
+    'Decision Tree': {'max_depth': [3, 5, 7]},
+    'Random Forest': {'n_estimators': [100, 200], 'max_depth': [5, 10]},
+    'Gradient Boosting': {'n_estimators': [100, 200], 'learning_rate': [0.01, 0.1]}
+}
+
+# Function to train and evaluate models
+def evaluate_model(name, model, X_train, X_test, y_train, y_test):
+    grid = GridSearchCV(model, param_grids[name], cv=5, n_jobs=-1) if name in param_grids else None
+    if grid:
+        grid.fit(X_train, y_train)
+        best_model = grid.best_estimator_
+    else:
+        best_model = model
+        best_model.fit(X_train, y_train)
+    
+    y_pred = best_model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
     f1 = f1_score(y_test, y_pred)
     print(f"\n{name} Performance:")
     print(f"Accuracy: {acc:.4f}")
     print(f"F1 Score: {f1:.4f}")
     print(classification_report(y_test, y_pred))
-    sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt='d', cmap='Blues')
+    
+    # Confusion Matrix
+    cm = confusion_matrix(y_test, y_pred)
+    plt.figure(figsize=(6,4))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False, xticklabels=['No Diabetes', 'Diabetes'], yticklabels=['No Diabetes', 'Diabetes'])
     plt.title(f'{name} - Confusion Matrix')
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
     plt.show()
+    
+    return acc, f1
+
+# Store results for comparison
+results = {}
+
+# Train and Evaluate all models
+for name, model in models.items():
+    acc, f1 = evaluate_model(name, model, X_train_scaled, X_test_scaled, y_train, y_test)
+    results[name] = {'Accuracy': acc, 'F1 Score': f1}
+
+# Visualizing model performance
+results_df = pd.DataFrame(results).T
+results_df.plot(kind='bar', figsize=(10, 6))
+plt.title('Model Performance Comparison')
+plt.ylabel('Score')
+plt.xticks(rotation=45)
+plt.show()
