@@ -36,10 +36,34 @@ def explore_data(df):
     print(df['Outcome'].value_counts())
     print("\nTarget class distribution (%):")
     print(df['Outcome'].value_counts() * 100 / len(df))
+    
+    # Visualizing the class distribution
     sns.countplot(x='Outcome', data=df)
     plt.title('Class Distribution')
     plt.show()
+    
+    # Correlation Heatmap
+    plt.figure(figsize=(15,10))
+    sns.heatmap(df.corr(), annot=True, cmap='coolwarm')
+    plt.title('Feature Correlation Heatmap')
+    plt.show()
 
+    # Outcome Value Counts
+    print("\nTarget class distribution (counts):")
+    print(df['Outcome'].value_counts())
+    df['Outcome'].value_counts().plot(kind='bar')
+    plt.title('Outcome Class Distribution (Bar Plot)')
+    plt.show()
+
+    # Pairplot
+    sns.pairplot(df, hue=None)
+    plt.title('Feature Pairplot')
+    plt.show()
+
+    # Crosstab for Pregnancies vs Outcome
+    print("\nCrosstab of Pregnancies and Outcome:")
+    print(pd.crosstab(df.Pregnancies, df.Outcome))
+    
 explore_data(df)
 
 # Drop duplicates if any
@@ -81,7 +105,7 @@ param_grids = {
     'Gradient Boosting': {'n_estimators': [100, 200], 'learning_rate': [0.01, 0.1]}
 }
 
-# Function to train and evaluate models
+# Train and Evaluate models with cross-validation and ROC curve
 def evaluate_model(name, model, X_train, X_test, y_train, y_test):
     grid = GridSearchCV(model, param_grids[name], cv=5, n_jobs=-1) if name in param_grids else None
     if grid:
@@ -91,13 +115,24 @@ def evaluate_model(name, model, X_train, X_test, y_train, y_test):
         best_model = model
         best_model.fit(X_train, y_train)
     
+    # Cross-validation
+    cv_scores = cross_val_score(best_model, X_train, y_train, cv=5, scoring='accuracy')
+    print(f"\n{name} Cross-Validation Accuracy: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+
+    # Predictions and evaluation
     y_pred = best_model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
     f1 = f1_score(y_test, y_pred)
-    print(f"\n{name} Performance:")
+    print(f"\n{name} Test Performance:")
     print(f"Accuracy: {acc:.4f}")
     print(f"F1 Score: {f1:.4f}")
     print(classification_report(y_test, y_pred))
+    
+    # ROC Curve
+    y_prob = best_model.predict_proba(X_test)[:, 1] if hasattr(best_model, "predict_proba") else best_model.decision_function(X_test)
+    fpr, tpr, _ = roc_curve(y_test, y_prob)
+    auc = roc_auc_score(y_test, y_prob)
+    plt.plot(fpr, tpr, label=f'{name} (AUC = {auc:.2f})')
     
     # Confusion Matrix
     cm = confusion_matrix(y_test, y_pred)
@@ -113,10 +148,18 @@ def evaluate_model(name, model, X_train, X_test, y_train, y_test):
 # Store results for comparison
 results = {}
 
-# Train and Evaluate all models
+# Train and evaluate all models
+plt.figure(figsize=(10, 6))
 for name, model in models.items():
     acc, f1 = evaluate_model(name, model, X_train_scaled, X_test_scaled, y_train, y_test)
     results[name] = {'Accuracy': acc, 'F1 Score': f1}
+
+plt.plot([0, 1], [0, 1], 'k--')  # Diagonal line for reference
+plt.title('ROC Curves')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.legend(loc='lower right')
+plt.show()
 
 # Visualizing model performance
 results_df = pd.DataFrame(results).T
