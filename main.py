@@ -3,9 +3,9 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import (confusion_matrix, accuracy_score, f1_score, classification_report)
+from sklearn.metrics import (confusion_matrix, accuracy_score, f1_score, classification_report, roc_curve, roc_auc_score)
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
@@ -16,7 +16,7 @@ import warnings
 
 # Ignore warnings
 warnings.filterwarnings("ignore")
-sns.set()
+sns.set(style="whitegrid")
 plt.style.use("ggplot")
 
 # Load Dataset
@@ -32,41 +32,26 @@ def explore_data(df):
     print(f"\nNumber of duplicated rows: {df.duplicated().sum()}")
     print("\nStatistical Summary:")
     print(df.describe())
-    print("\nTarget class distribution (counts):")
-    print(df['Outcome'].value_counts())
-    print("\nTarget class distribution (%):")
-    print(df['Outcome'].value_counts() * 100 / len(df))
     
-    # Visualizing the class distribution
-    sns.countplot(x='Outcome', data=df)
-    plt.title('Class Distribution')
+    # Visualizing target class distribution
+    plt.figure(figsize=(10,5))
+    sns.countplot(x='Outcome', data=df, palette='Set2')
+    plt.title('Target Class Distribution')
     plt.show()
-    
+
     # Correlation Heatmap
     plt.figure(figsize=(15,10))
-    sns.heatmap(df.corr(), annot=True, cmap='coolwarm')
+    sns.heatmap(df.corr(), annot=True, cmap='coolwarm', fmt='.2f')
     plt.title('Feature Correlation Heatmap')
-    plt.show()
-
-    # Outcome Value Counts
-    print("\nTarget class distribution (counts):")
-    print(df['Outcome'].value_counts())
-    df['Outcome'].value_counts().plot(kind='bar')
-    plt.title('Outcome Class Distribution (Bar Plot)')
-    plt.show()
-
-    # Pairplot
-    sns.pairplot(df, hue=None)
-    plt.title('Feature Pairplot')
     plt.show()
 
     # Crosstab for Pregnancies vs Outcome
     print("\nCrosstab of Pregnancies and Outcome:")
     print(pd.crosstab(df.Pregnancies, df.Outcome))
-    
+
 explore_data(df)
 
-# Drop duplicates if any
+# Drop duplicates
 df.drop_duplicates(inplace=True)
 
 # Splitting Features and Target
@@ -85,17 +70,16 @@ scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# Define models with some parameter tuning
+# Define models and hyperparameters
 models = {
     'Logistic Regression': LogisticRegression(),
     'K-Nearest Neighbors': KNeighborsClassifier(),
-    'Support Vector Machine': SVC(),
+    'Support Vector Machine': SVC(probability=True),
     'Decision Tree': DecisionTreeClassifier(),
     'Random Forest': RandomForestClassifier(),
     'Gradient Boosting': GradientBoostingClassifier()
 }
 
-# Hyperparameter tuning grid (optional)
 param_grids = {
     'Logistic Regression': {'C': [0.1, 1, 10]},
     'K-Nearest Neighbors': {'n_neighbors': [3, 5, 7]},
@@ -105,8 +89,9 @@ param_grids = {
     'Gradient Boosting': {'n_estimators': [100, 200], 'learning_rate': [0.01, 0.1]}
 }
 
-# Train and Evaluate models with cross-validation and ROC curve
+# Model Evaluation
 def evaluate_model(name, model, X_train, X_test, y_train, y_test):
+    # Hyperparameter tuning (if applicable)
     grid = GridSearchCV(model, param_grids[name], cv=5, n_jobs=-1) if name in param_grids else None
     if grid:
         grid.fit(X_train, y_train)
@@ -119,7 +104,7 @@ def evaluate_model(name, model, X_train, X_test, y_train, y_test):
     cv_scores = cross_val_score(best_model, X_train, y_train, cv=5, scoring='accuracy')
     print(f"\n{name} Cross-Validation Accuracy: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
 
-    # Predictions and evaluation
+    # Predictions and metrics
     y_pred = best_model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
     f1 = f1_score(y_test, y_pred)
@@ -128,7 +113,7 @@ def evaluate_model(name, model, X_train, X_test, y_train, y_test):
     print(f"F1 Score: {f1:.4f}")
     print(classification_report(y_test, y_pred))
     
-    # ROC Curve
+    # ROC Curve and AUC
     y_prob = best_model.predict_proba(X_test)[:, 1] if hasattr(best_model, "predict_proba") else best_model.decision_function(X_test)
     fpr, tpr, _ = roc_curve(y_test, y_prob)
     auc = roc_auc_score(y_test, y_prob)
@@ -142,28 +127,29 @@ def evaluate_model(name, model, X_train, X_test, y_train, y_test):
     plt.xlabel('Predicted')
     plt.ylabel('Actual')
     plt.show()
-    
+
     return acc, f1
 
 # Store results for comparison
 results = {}
 
-# Train and evaluate all models
+# Evaluate all models
 plt.figure(figsize=(10, 6))
 for name, model in models.items():
     acc, f1 = evaluate_model(name, model, X_train_scaled, X_test_scaled, y_train, y_test)
     results[name] = {'Accuracy': acc, 'F1 Score': f1}
 
-plt.plot([0, 1], [0, 1], 'k--')  # Diagonal line for reference
+# ROC Curve Visualization
+plt.plot([0, 1], [0, 1], 'k--')  # Diagonal reference line
 plt.title('ROC Curves')
 plt.xlabel('False Positive Rate')
 plt.ylabel('True Positive Rate')
 plt.legend(loc='lower right')
 plt.show()
 
-# Visualizing model performance
+# Visualizing Model Performance
 results_df = pd.DataFrame(results).T
-results_df.plot(kind='bar', figsize=(10, 6))
+results_df.plot(kind='bar', figsize=(10, 6), color=['skyblue', 'salmon'])
 plt.title('Model Performance Comparison')
 plt.ylabel('Score')
 plt.xticks(rotation=45)
