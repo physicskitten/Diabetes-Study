@@ -38,5 +38,14 @@ The models are tuned using `GridSearchCV`, and performance is evaluated based on
 
 Additionally, confusion matrices are plotted for each model.
 
+## Feature Scaling
+Feature scaling is performed using `StandardScaler` to ensure that all features are on the same scale. This is particularly important for algorithms such as KNN and SVM.
+## Cross-Validation
+Cross-validation is used during model training to ensure that the model's performance is evaluated across different subsets of the data, providing a more reliable estimate of its accuracy and robustness.
+## ROC Curves and AUC
+ROC curves are plotted for each model to visualize the trade-off between true positive and false positive rates. The Area Under the Curve (AUC) is also calculated to measure overall model performance.
+## Confusion Matrix
+Confusion matrices are used to visualize the performance of each model by showing the counts of true positives, false positives, true negatives, and false negatives. This helps in understanding how well the model distinguishes between diabetic and non-diabetic cases.
+
 ## Results
 The results are compared using a bar chart of model performance based on accuracy and F1 score. The confusion matrix for each model is also displayed to visualize the performance on both classes (diabetic and non-diabetic).
