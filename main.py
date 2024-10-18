@@ -1,4 +1,5 @@
 # Import Libraries
+import argparse
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -21,8 +22,14 @@ warnings.filterwarnings("ignore")
 sns.set(style="whitegrid")  # Seaborn's whitegrid theme for consistency
 plt.style.use("ggplot")  # Matplotlib ggplot style for better plot visuals
 
+# Set up argument parsing
+parser = argparse.ArgumentParser(description='Diabetes Prediction Model')
+parser.add_argument('--data', type=str, default='diabetes.csv', help='Path to the dataset')
+parser.add_argument('--test_size', type=float, default=0.3, help='Test set size (0 to 1)')
+args = parser.parse_args()
+
 # Load Dataset
-df = pd.read_csv('/kaggle/input/diabetes-data-set/diabetes.csv')  # Read dataset into DataFrame
+df = pd.read_csv(args.data)  # Read dataset into DataFrame
 
 # Initial Exploration
 def explore_data(df):
@@ -68,8 +75,8 @@ y = df['Outcome']  # Target
 ros = RandomOverSampler(random_state=42)
 X_resampled, y_resampled = ros.fit_resample(X, y)
 
-# Split data into train and test sets (70/30 split)
-X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.3, random_state=42, stratify=y_resampled)
+# Split data into train and test sets (using the test size from arguments)
+X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=args.test_size, random_state=42, stratify=y_resampled)
 
 # Feature Scaling (standardize features)
 scaler = StandardScaler()
@@ -100,8 +107,10 @@ param_grids = {
 def evaluate_model(name, model, X_train, X_test, y_train, y_test):
     grid = GridSearchCV(model, param_grids[name], cv=5, n_jobs=-1) if name in param_grids else None
     best_model = grid.best_estimator_ if grid else model
-    if grid: grid.fit(X_train, y_train)
-    else: best_model.fit(X_train, y_train)
+    if grid: 
+        grid.fit(X_train, y_train)
+    else: 
+        best_model.fit(X_train, y_train)
     
     # Cross-validation
     cv_scores = cross_val_score(best_model, X_train, y_train, cv=5, scoring='accuracy')
@@ -157,3 +166,7 @@ plt.title('Model Performance Comparison')
 plt.ylabel('Score')
 plt.xticks(rotation=45)
 plt.show()
+
+# Save results to CSV
+results_df.to_csv('model_results.csv', index=True)
+print("Model results saved to 'model_results.csv'.")
